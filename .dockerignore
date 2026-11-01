@@ -1,0 +1,16 @@
+node_modules
+.next*
+.env*
+.local
+.cache
+.git
+.agents
+.codex
+work
+test-results
+playwright-report
+coverage
+*.log
+*.tsbuildinfo
+*-service-account.json
+*.pem

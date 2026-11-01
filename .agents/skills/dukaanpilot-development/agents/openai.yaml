@@ -1,0 +1,4 @@
+interface:
+  display_name: "DukaanPilot Development"
+  short_description: "Build DukaanPilot in verified implementation stages"
+  default_prompt: "Use $dukaanpilot-development to inspect the project, implement the next authorized development stage, and record validation evidence."

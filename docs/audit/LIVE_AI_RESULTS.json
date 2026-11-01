@@ -1,0 +1,83 @@
+{
+  "date": "2026-11-01",
+  "model": "gemini-3.5-flash-lite",
+  "scope": "Synthetic isolated tenant; no approvals, no real customers, at most eight calls, one attempt each",
+  "planned": 8,
+  "executed": 8,
+  "passed": 8,
+  "postedSales": 0,
+  "providerCalls": 8,
+  "inputTokens": 3202,
+  "outputTokens": 695,
+  "results": [
+    {
+      "id": "reported-credit-date",
+      "text": "ali ko 600 udhare diye hain udhar mai add kardo 1 december 2026 ko wapis kareyga",
+      "expected": "proposal",
+      "actual": "proposal",
+      "passed": true,
+      "httpStatus": 200,
+      "totalPaisa": "60000"
+    },
+    {
+      "id": "comma-amount",
+      "text": "Ali ko PKR 1,250 ka udhar add karo",
+      "expected": "proposal",
+      "actual": "proposal",
+      "passed": true,
+      "httpStatus": 200,
+      "totalPaisa": "125000"
+    },
+    {
+      "id": "local-phone",
+      "text": "0300-1234567 ko PKR 600 ki sale, cash received PKR 0.",
+      "expected": "proposal",
+      "actual": "proposal",
+      "passed": true,
+      "httpStatus": 200,
+      "totalPaisa": "60000"
+    },
+    {
+      "id": "explicit-time",
+      "text": "Ali ko 600 udhar mai add karo 1 December 2026 ko 3 pm wapis karega",
+      "expected": "proposal",
+      "actual": "proposal",
+      "passed": true,
+      "httpStatus": 200,
+      "totalPaisa": "60000"
+    },
+    {
+      "id": "new-customer",
+      "text": "Sana sale PKR 650, cash received PKR 0.",
+      "expected": "customer_required",
+      "actual": "customer_required",
+      "passed": true,
+      "httpStatus": 200
+    },
+    {
+      "id": "bank-receipt",
+      "text": "I confirm a sale to Ali, total PKR 650, money received PKR 650 by bank.",
+      "expected": "proposal",
+      "actual": "proposal",
+      "passed": true,
+      "httpStatus": 200,
+      "totalPaisa": "65000"
+    },
+    {
+      "id": "customer-balance",
+      "text": "Ali ka total udhar kitna hai?",
+      "expected": "summary",
+      "actual": "summary",
+      "passed": true,
+      "httpStatus": 200
+    },
+    {
+      "id": "ambiguous-relative-date",
+      "text": "Ali ko PKR 600 udhar add karo kal wapis karega",
+      "expected": "clarification",
+      "actual": "clarification",
+      "passed": true,
+      "httpStatus": 200
+    }
+  ]
+}

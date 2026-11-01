@@ -1,0 +1,4 @@
+interface:
+  display_name: "DukaanPilot Factory Loop"
+  short_description: "Build and verify bounded order follow-ups"
+  default_prompt: "Use $dukaanpilot-factory-loop to implement the next ready slice of the pending-order workflow and verify its bounds."

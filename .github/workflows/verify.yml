@@ -1,0 +1,49 @@
+name: Verify DukaanPilot
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  local-engineering:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      AI_ENABLED: 'false'
+      AI_LIVE_DATA_ENABLED: 'false'
+      WHATSAPP_OUTBOUND_ENABLED: 'false'
+      E2E_EXTERNAL_SERVER: 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci --no-audit
+      - name: Build and check
+        shell: pwsh
+        run: |
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm audit --omit=dev --audit-level=moderate
+      - name: Start isolated local services
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .local | Out-Null
+          Start-Process node -ArgumentList @('scripts/local-db.mjs') -WindowStyle Hidden -RedirectStandardOutput .local/ci-db.log -RedirectStandardError .local/ci-db-error.log
+          Start-Process node -ArgumentList @('node_modules/firebase-tools/lib/bin/firebase.js','emulators:start','--only','auth','--project','demo-dukaanpilot','--config','firebase.json') -WindowStyle Hidden -RedirectStandardOutput .local/ci-auth.log -RedirectStandardError .local/ci-auth-error.log
+          node scripts/wait-local.mjs services
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:integration
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Start-Process node -ArgumentList @('scripts/s2-test-server.mjs') -WindowStyle Hidden -RedirectStandardOutput .local/ci-web.log -RedirectStandardError .local/ci-web-error.log
+          node scripts/wait-local.mjs web
+      - name: Desktop and mobile acceptance
+        run: npm run test:e2e
+      # No deployment, provider secrets, live Gemini calls or WhatsApp sends.
+      # Pin reviewed action/image digests before enabling a release workflow.

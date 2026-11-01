@@ -1,0 +1,841 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum Role {
+  OWNER
+}
+
+model User {
+  id                  String        @id @default(uuid()) @db.Uuid
+  authProviderSubject String        @unique
+  email               String
+  name                String?
+  createdAt           DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime      @updatedAt @db.Timestamptz(3)
+  memberships         TenantUser[]
+  sessions            AuthSession[]
+}
+
+model AuthSession {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  tokenHash       String    @unique @db.VarChar(64)
+  expiresAt       DateTime  @db.Timestamptz(3)
+  revokedAt       DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  authenticatedAt DateTime  @default(now()) @db.Timestamptz(3)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, expiresAt])
+}
+
+model Tenant {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  name                    String                   @db.VarChar(120)
+  status                  TenantStatus             @default(ACTIVE)
+  operationsPausedAt      DateTime?                @db.Timestamptz(3)
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @db.Timestamptz(3)
+  profile                 BusinessProfile?
+  members                 TenantUser[]
+  customers               Customer[]
+  suppliers               Supplier[]
+  auditEvents             AuditEvent[]
+  idempotency             IdempotencyRecord[]
+  challenges              PairingChallenge[]
+  channelIdentities       OwnerChannelIdentity[]
+  proposals               AIActionProposal[]
+  approvals               ApprovalEvent[]
+  orders                  Order[]
+  orderItems              OrderItem[]
+  sales                   Sale[]
+  payments                Payment[]
+  allocations             PaymentAllocation[]
+  ledgerEntries           LedgerEntry[]
+  reversals               Reversal[]
+  domainEvents            DomainEvent[]
+  subscription            Subscription?
+  aiExecutions            AIExecution[]
+  whatsapp                WhatsAppConnection?
+  conversations           Conversation[]
+  inboundMessages         InboundMessage[]
+  outboxMessages          OutboxMessage[]
+  messageStatuses         MessageStatusEvent[]
+  channelApprovals        ChannelApprovalControl[]
+  jobs                    Job[]
+  customerUpdateProposals CustomerUpdateProposal[]
+  contactConsents         ContactConsent[]
+  workflowInstances       WorkflowInstance[]
+  operatorEvents          OperatorEvent[]
+  privacyRequests         PrivacyRequest[]
+}
+
+enum Plan {
+  FREE
+  SMART
+  PRO
+  BUSINESS
+}
+
+enum AIExecutionStatus {
+  RESERVED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Subscription {
+  tenantId  String    @id @db.Uuid
+  plan      Plan      @default(FREE)
+  expiresAt DateTime? @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+}
+
+model AIExecution {
+  id              String            @id @default(uuid()) @db.Uuid
+  tenantId        String            @db.Uuid
+  ownerUserId     String            @db.Uuid
+  key             String            @db.VarChar(100)
+  inputHash       String            @db.VarChar(64)
+  status          AIExecutionStatus @default(RESERVED)
+  day             String            @db.VarChar(10)
+  month           String            @db.VarChar(7)
+  model           String            @db.VarChar(100)
+  promptVersion   String            @db.VarChar(40)
+  reservedNanoUsd BigInt
+  chargedNanoUsd  BigInt
+  actionUnits     Int               @default(0)
+  calls           Int               @default(0)
+  inputTokens     Int               @default(0)
+  outputTokens    Int               @default(0)
+  result          Json?
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(3)
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  owner           TenantUser        @relation(fields: [tenantId, ownerUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@unique([tenantId, key])
+  @@unique([tenantId, id])
+  @@index([day, status])
+  @@index([month, tenantId])
+}
+
+model TenantUser {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  tenantId                String                   @unique @db.Uuid
+  userId                  String                   @unique @db.Uuid
+  role                    Role                     @default(OWNER)
+  status                  MembershipStatus         @default(ACTIVE)
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @db.Timestamptz(3)
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  auditEvents             AuditEvent[]
+  challenges              PairingChallenge[]
+  identities              OwnerChannelIdentity[]
+  idempotency             IdempotencyRecord[]
+  proposals               AIActionProposal[]
+  approvals               ApprovalEvent[]
+  reversals               Reversal[]
+  aiExecutions            AIExecution[]
+  customerUpdateProposals CustomerUpdateProposal[]
+  workflowInstances       WorkflowInstance[]
+  privacyRequests         PrivacyRequest[]
+
+  @@unique([tenantId, userId])
+}
+
+model BusinessProfile {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @unique @db.Uuid
+  businessType String   @db.VarChar(80)
+  city         String   @db.VarChar(80)
+  language     String   @default("roman-urdu") @db.VarChar(20)
+  currency     String   @default("PKR") @db.VarChar(3)
+  timezone     String   @default("Asia/Karachi") @db.VarChar(40)
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+}
+
+model Customer {
+  id            String              @id @default(uuid()) @db.Uuid
+  tenantId      String              @db.Uuid
+  name          String              @db.VarChar(120)
+  phoneE164     String?             @db.VarChar(20)
+  notes         String?             @db.VarChar(2000)
+  version       Int                 @default(1)
+  isWalkIn      Boolean             @default(false)
+  archivedAt    DateTime?           @db.Timestamptz(3)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @updatedAt @db.Timestamptz(3)
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  orders        Order[]
+  sales         Sale[]
+  payments      Payment[]
+  allocations   PaymentAllocation[]
+  ledgerEntries LedgerEntry[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, phoneE164])
+  @@index([tenantId, archivedAt, createdAt, id])
+}
+
+model Supplier {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @db.Uuid
+  name       String    @db.VarChar(120)
+  phoneE164  String?   @db.VarChar(20)
+  notes      String?   @db.VarChar(2000)
+  version    Int       @default(1)
+  archivedAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, phoneE164])
+  @@index([tenantId, archivedAt, createdAt, id])
+}
+
+model AuditEvent {
+  id          String     @id @default(uuid()) @db.Uuid
+  tenantId    String     @db.Uuid
+  actorUserId String     @db.Uuid
+  action      String     @db.VarChar(80)
+  targetType  String     @db.VarChar(40)
+  targetId    String     @db.Uuid
+  requestId   String     @db.Uuid
+  metadata    Json
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actor       TenantUser @relation(fields: [tenantId, actorUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+}
+
+model IdempotencyRecord {
+  id          String     @id @default(uuid()) @db.Uuid
+  tenantId    String     @db.Uuid
+  actorUserId String     @db.Uuid
+  scope       String
+  route       String     @db.VarChar(200)
+  key         String     @db.VarChar(100)
+  requestHash String     @db.VarChar(64)
+  result      Json
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actor       TenantUser @relation(fields: [tenantId, actorUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@unique([scope, route, key])
+  @@index([tenantId, createdAt])
+}
+
+model PairingChallenge {
+  id         String     @id @default(uuid()) @db.Uuid
+  tenantId   String     @db.Uuid
+  userId     String     @db.Uuid
+  codeHash   String     @db.VarChar(64)
+  attempts   Int        @default(0)
+  expiresAt  DateTime   @db.Timestamptz(3)
+  consumedAt DateTime?  @db.Timestamptz(3)
+  revokedAt  DateTime?  @db.Timestamptz(3)
+  createdAt  DateTime   @default(now()) @db.Timestamptz(3)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  owner      TenantUser @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, userId, createdAt])
+}
+
+model OwnerChannelIdentity {
+  id               String                   @id @default(uuid()) @db.Uuid
+  tenantId         String                   @db.Uuid
+  userId           String                   @db.Uuid
+  providerSenderId String                   @db.VarChar(32)
+  revokedAt        DateTime?                @db.Timestamptz(3)
+  createdAt        DateTime                 @default(now()) @db.Timestamptz(3)
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  owner            TenantUser               @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: Restrict)
+  controls         ChannelApprovalControl[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, providerSenderId])
+}
+
+model WhatsAppConnection {
+  tenantId        String   @id @db.Uuid
+  phoneNumberId   String   @unique @db.VarChar(40)
+  active          Boolean  @default(false)
+  graphVersion    String   @db.VarChar(20)
+  reviewReference String   @db.VarChar(200)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+}
+
+model Conversation {
+  id               String           @id @default(uuid()) @db.Uuid
+  tenantId         String           @db.Uuid
+  providerSenderId String           @db.VarChar(32)
+  lastInboundAt    DateTime         @db.Timestamptz(3)
+  consentGrantedAt DateTime?        @db.Timestamptz(3)
+  consentEvidence  String?          @db.VarChar(200)
+  optedOutAt       DateTime?        @db.Timestamptz(3)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  inbound          InboundMessage[]
+  outbox           OutboxMessage[]
+  contactConsents  ContactConsent[]
+
+  @@unique([tenantId, providerSenderId])
+  @@unique([tenantId, id])
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  FAILED
+  CANCELLED
+}
+
+enum OutboxStatus {
+  PENDING
+  SENDING
+  ACCEPTED
+  DELIVERED
+  READ
+  FAILED
+  UNKNOWN
+  CANCELLED
+}
+
+model InboundMessage {
+  id                String       @id @default(uuid()) @db.Uuid
+  tenantId          String       @db.Uuid
+  conversationId    String       @db.Uuid
+  providerMessageId String       @db.VarChar(200)
+  providerTimestamp DateTime     @db.Timestamptz(3)
+  type              String       @db.VarChar(30)
+  body              String?      @db.VarChar(2000)
+  state             String       @default("PENDING") @db.VarChar(40)
+  outcome           String?      @db.VarChar(500)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  conversation      Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, providerMessageId])
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+}
+
+model OutboxMessage {
+  id                String                  @id @default(uuid()) @db.Uuid
+  tenantId          String                  @db.Uuid
+  conversationId    String                  @db.Uuid
+  logicalActionKey  String                  @db.VarChar(150)
+  recipient         String                  @db.VarChar(32)
+  body              String?                 @db.VarChar(2000)
+  payloadHash       String                  @db.VarChar(64)
+  approvalRef       String?                 @db.Uuid
+  proactive         Boolean                 @default(false)
+  workflowId        String?                 @db.Uuid
+  status            OutboxStatus            @default(PENDING)
+  attempts          Int                     @default(0)
+  notBefore         DateTime                @default(now()) @db.Timestamptz(3)
+  expiresAt         DateTime                @db.Timestamptz(3)
+  providerMessageId String?                 @db.VarChar(200)
+  sendingAt         DateTime?               @db.Timestamptz(3)
+  failureCode       String?                 @db.VarChar(60)
+  createdAt         DateTime                @default(now()) @db.Timestamptz(3)
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  conversation      Conversation            @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
+  approval          CustomerUpdateProposal? @relation(fields: [tenantId, approvalRef], references: [tenantId, id], onDelete: Restrict)
+  workflow          WorkflowInstance?       @relation(fields: [tenantId, workflowId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, logicalActionKey])
+  @@unique([tenantId, providerMessageId])
+  @@unique([tenantId, id])
+  @@index([status, notBefore])
+}
+
+model MessageStatusEvent {
+  id                String       @id @default(uuid()) @db.Uuid
+  tenantId          String       @db.Uuid
+  providerMessageId String       @db.VarChar(200)
+  status            OutboxStatus
+  providerTimestamp DateTime     @db.Timestamptz(3)
+  dedupKey          String       @db.VarChar(64)
+  errorCode         String?      @db.VarChar(40)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, dedupKey])
+  @@index([tenantId, providerMessageId])
+}
+
+model ChannelApprovalControl {
+  id          String               @id @default(uuid()) @db.Uuid
+  tenantId    String               @db.Uuid
+  identityId  String               @db.Uuid
+  proposalId  String               @db.Uuid
+  version     Int
+  payloadHash String               @db.VarChar(64)
+  tokenHash   String               @unique @db.VarChar(64)
+  expiresAt   DateTime             @db.Timestamptz(3)
+  consumedAt  DateTime?            @db.Timestamptz(3)
+  createdAt   DateTime             @default(now()) @db.Timestamptz(3)
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  identity    OwnerChannelIdentity @relation(fields: [tenantId, identityId], references: [tenantId, id], onDelete: Restrict)
+  proposal    AIActionProposal     @relation(fields: [tenantId, proposalId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+}
+
+model CustomerUpdateProposal {
+  id           String            @id @default(uuid()) @db.Uuid
+  tenantId     String            @db.Uuid
+  ownerUserId  String            @db.Uuid
+  orderId      String            @db.Uuid
+  recipient    String            @db.VarChar(32)
+  body         String?           @db.VarChar(2000)
+  payloadHash  String            @db.VarChar(64)
+  version      Int               @default(1)
+  status       ProposalStatus    @default(READY)
+  orderVersion Int
+  workflowId   String?           @db.Uuid
+  expiresAt    DateTime          @db.Timestamptz(3)
+  approvedAt   DateTime?         @db.Timestamptz(3)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  owner        TenantUser        @relation(fields: [tenantId, ownerUserId], references: [tenantId, userId], onDelete: Restrict)
+  order        Order             @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Restrict)
+  workflow     WorkflowInstance? @relation(fields: [tenantId, workflowId, orderId], references: [tenantId, id, orderId], onDelete: Restrict)
+  outbox       OutboxMessage[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+}
+
+model Job {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @db.Uuid
+  type         String    @db.VarChar(40)
+  entityId     String    @db.Uuid
+  executionKey String    @unique @db.VarChar(150)
+  runAt        DateTime  @db.Timestamptz(3)
+  status       JobStatus @default(PENDING)
+  attempts     Int       @default(0)
+  leaseUntil   DateTime? @db.Timestamptz(3)
+  leaseToken   String?   @db.Uuid
+  failureCode  String?   @db.VarChar(60)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([status, runAt])
+}
+
+enum WorkflowState {
+  SCHEDULED
+  CHECKING
+  WAITING_OWNER
+  RESOLVED
+  CANCELLED
+  NEEDS_HUMAN
+  EXPIRED
+  FAILED
+}
+
+model WorkflowInstance {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  tenantId              String                   @db.Uuid
+  ownerUserId           String                   @db.Uuid
+  orderId               String                   @db.Uuid
+  state                 WorkflowState            @default(SCHEDULED)
+  enabledAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  startAt               DateTime                 @db.Timestamptz(3)
+  expiresAt             DateTime                 @db.Timestamptz(3)
+  dueAtSnapshot         DateTime                 @db.Timestamptz(3)
+  nextRunAt             DateTime?                @db.Timestamptz(3)
+  checksUsed            Int                      @default(0)
+  ownerRemindersUsed    Int                      @default(0)
+  customerUpdatesUsed   Int                      @default(0)
+  maxChecks             Int                      @default(3)
+  maxOwnerReminders     Int                      @default(2)
+  maxCustomerUpdates    Int                      @default(1)
+  reminderIntervalHours Int                      @default(12)
+  lastOwnerReminderAt   DateTime?                @db.Timestamptz(3)
+  terminalReason        String?                  @db.VarChar(60)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  tenant                Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  owner                 TenantUser               @relation(fields: [tenantId, ownerUserId], references: [tenantId, userId], onDelete: Restrict)
+  order                 Order                    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Restrict)
+  events                WorkflowEvent[]
+  outbox                OutboxMessage[]
+  updates               CustomerUpdateProposal[]
+
+  @@unique([tenantId, orderId])
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, orderId])
+  @@index([state, nextRunAt])
+}
+
+model WorkflowEvent {
+  id         String           @id @default(uuid()) @db.Uuid
+  tenantId   String           @db.Uuid
+  workflowId String           @db.Uuid
+  type       String           @db.VarChar(60)
+  logicalKey String           @db.VarChar(150)
+  metadata   Json
+  occurredAt DateTime         @default(now()) @db.Timestamptz(3)
+  workflow   WorkflowInstance @relation(fields: [tenantId, workflowId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, workflowId, logicalKey])
+  @@index([tenantId, workflowId, occurredAt])
+}
+
+model OperatorEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String?  @db.Uuid
+  actorRef        String   @db.VarChar(200)
+  action          String   @db.VarChar(60)
+  reviewReference String   @db.VarChar(200)
+  metadata        Json
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt])
+}
+
+model PrivacyRequest {
+  id              String     @id @default(uuid()) @db.Uuid
+  tenantId        String     @db.Uuid
+  ownerUserId     String     @db.Uuid
+  kind            String     @db.VarChar(20)
+  status          String     @default("REQUESTED") @db.VarChar(30)
+  reviewReference String?    @db.VarChar(200)
+  createdAt       DateTime   @default(now()) @db.Timestamptz(3)
+  tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  owner           TenantUser @relation(fields: [tenantId, ownerUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+}
+
+model RateLimitBucket {
+  key       String   @id @db.VarChar(200)
+  count     Int      @default(1)
+  expiresAt DateTime @db.Timestamptz(3)
+}
+
+model ContactConsent {
+  id             String       @id @default(uuid()) @db.Uuid
+  tenantId       String       @db.Uuid
+  conversationId String       @db.Uuid
+  granted        Boolean
+  purpose        String       @db.VarChar(30)
+  source         String       @db.VarChar(30)
+  evidence       String       @db.VarChar(200)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  conversation   Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, conversationId, createdAt])
+}
+
+enum ProposalIntent {
+  CREATE_ORDER
+  UPDATE_ORDER
+  CHANGE_ORDER_STATUS
+  POST_SALE
+  RECORD_PAYMENT
+  REVERSE_SALE
+  REVERSE_PAYMENT
+  SEND_CUSTOMER_UPDATE
+}
+
+enum ProposalStatus {
+  DRAFT
+  NEEDS_CLARIFICATION
+  READY
+  EXECUTED
+  REJECTED
+  EXPIRED
+  FAILED
+}
+
+enum OrderStatus {
+  PENDING
+  FULFILLED
+  CANCELLED
+}
+
+enum PostingStatus {
+  POSTED
+  REVERSED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerKind {
+  SALE
+  PAYMENT
+  SALE_REVERSAL
+  PAYMENT_REVERSAL
+}
+
+model AIActionProposal {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  tenantId                String                   @db.Uuid
+  ownerUserId             String                   @db.Uuid
+  intent                  ProposalIntent
+  origin                  String                   @default("WEB") @db.VarChar(20)
+  payload                 Json
+  payloadHash             String                   @db.VarChar(64)
+  version                 Int                      @default(1)
+  status                  ProposalStatus           @default(READY)
+  expiresAt               DateTime                 @db.Timestamptz(3)
+  result                  Json?
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @db.Timestamptz(3)
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  owner                   TenantUser               @relation(fields: [tenantId, ownerUserId], references: [tenantId, userId], onDelete: Restrict)
+  approvals               ApprovalEvent[]
+  orders                  Order[]
+  sales                   Sale[]
+  payments                Payment[]
+  reversals               Reversal[]
+  channelApprovalControls ChannelApprovalControl[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, createdAt])
+}
+
+model ApprovalEvent {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @db.Uuid
+  proposalId  String           @db.Uuid
+  ownerUserId String           @db.Uuid
+  version     Int
+  payloadHash String           @db.VarChar(64)
+  decision    String           @db.VarChar(20)
+  channel     String           @default("WEB") @db.VarChar(20)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  proposal    AIActionProposal @relation(fields: [tenantId, proposalId], references: [tenantId, id], onDelete: Restrict)
+  owner       TenantUser       @relation(fields: [tenantId, ownerUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@unique([tenantId, proposalId, version, decision])
+  @@index([tenantId, createdAt])
+}
+
+model Order {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  tenantId                String                   @db.Uuid
+  customerId              String                   @db.Uuid
+  proposalId              String                   @db.Uuid
+  status                  OrderStatus              @default(PENDING)
+  dueAt                   DateTime                 @db.Timestamptz(3)
+  totalPaisa              BigInt
+  pricingMode             String                   @db.VarChar(20)
+  notes                   String?                  @db.VarChar(2000)
+  version                 Int                      @default(1)
+  fulfilledAt             DateTime?                @db.Timestamptz(3)
+  cancelledAt             DateTime?                @db.Timestamptz(3)
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @db.Timestamptz(3)
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customer                Customer                 @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Restrict)
+  proposal                AIActionProposal         @relation(fields: [tenantId, proposalId], references: [tenantId, id], onDelete: Restrict)
+  items                   OrderItem[]
+  sale                    Sale?
+  customerUpdateProposals CustomerUpdateProposal[]
+  workflowInstance        WorkflowInstance?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, customerId])
+  @@unique([tenantId, proposalId])
+  @@index([tenantId, status, dueAt])
+}
+
+model OrderItem {
+  id             String  @id @default(uuid()) @db.Uuid
+  tenantId       String  @db.Uuid
+  orderId        String  @db.Uuid
+  description    String  @db.VarChar(200)
+  quantity       Decimal @db.Decimal(12, 3)
+  unitPricePaisa BigInt?
+  lineTotalPaisa BigInt?
+  tenant         Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  order          Order   @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, orderId])
+}
+
+model Sale {
+  id            String              @id @default(uuid()) @db.Uuid
+  tenantId      String              @db.Uuid
+  customerId    String              @db.Uuid
+  orderId       String?             @db.Uuid
+  proposalId    String              @db.Uuid
+  totalPaisa    BigInt
+  dueAt         DateTime?           @db.Timestamptz(3)
+  status        PostingStatus       @default(POSTED)
+  version       Int                 @default(1)
+  businessDate  String              @db.VarChar(10)
+  postedAt      DateTime            @default(now()) @db.Timestamptz(3)
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customer      Customer            @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Restrict)
+  order         Order?              @relation(fields: [tenantId, orderId, customerId], references: [tenantId, id, customerId], onDelete: Restrict)
+  proposal      AIActionProposal    @relation(fields: [tenantId, proposalId], references: [tenantId, id], onDelete: Restrict)
+  allocations   PaymentAllocation[]
+  ledgerEntries LedgerEntry[]
+  reversal      Reversal?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, customerId])
+  @@unique([tenantId, orderId])
+  @@unique([tenantId, orderId, customerId])
+  @@unique([tenantId, proposalId])
+  @@index([tenantId, customerId, postedAt])
+}
+
+model Payment {
+  id            String              @id @default(uuid()) @db.Uuid
+  tenantId      String              @db.Uuid
+  customerId    String              @db.Uuid
+  proposalId    String              @db.Uuid
+  amountPaisa   BigInt
+  method        PaymentMethod
+  status        PostingStatus       @default(POSTED)
+  version       Int                 @default(1)
+  receivedAt    DateTime            @default(now()) @db.Timestamptz(3)
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customer      Customer            @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Restrict)
+  proposal      AIActionProposal    @relation(fields: [tenantId, proposalId], references: [tenantId, id], onDelete: Restrict)
+  allocations   PaymentAllocation[]
+  ledgerEntries LedgerEntry[]
+  reversal      Reversal?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, customerId])
+  @@unique([tenantId, proposalId])
+  @@index([tenantId, customerId, receivedAt])
+}
+
+model PaymentAllocation {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  customerId  String    @db.Uuid
+  saleId      String    @db.Uuid
+  paymentId   String    @db.Uuid
+  amountPaisa BigInt
+  reversedAt  DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customer    Customer  @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Restrict)
+  sale        Sale      @relation(fields: [tenantId, saleId, customerId], references: [tenantId, id, customerId], onDelete: Restrict)
+  payment     Payment   @relation(fields: [tenantId, paymentId, customerId], references: [tenantId, id, customerId], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, paymentId, saleId])
+  @@index([tenantId, saleId, reversedAt])
+}
+
+model LedgerEntry {
+  id           String          @id @default(uuid()) @db.Uuid
+  tenantId     String          @db.Uuid
+  customerId   String          @db.Uuid
+  saleId       String?         @db.Uuid
+  paymentId    String?         @db.Uuid
+  direction    LedgerDirection
+  kind         LedgerKind
+  amountPaisa  BigInt
+  reversalOfId String?         @db.Uuid
+  effectiveAt  DateTime        @default(now()) @db.Timestamptz(3)
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customer     Customer        @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Restrict)
+  sale         Sale?           @relation(fields: [tenantId, saleId, customerId], references: [tenantId, id, customerId], onDelete: Restrict)
+  payment      Payment?        @relation(fields: [tenantId, paymentId, customerId], references: [tenantId, id, customerId], onDelete: Restrict)
+  reversalOf   LedgerEntry?    @relation("LedgerReversal", fields: [tenantId, reversalOfId, customerId], references: [tenantId, id, customerId], onDelete: Restrict)
+  reversedBy   LedgerEntry?    @relation("LedgerReversal")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, customerId])
+  @@unique([tenantId, reversalOfId])
+  @@unique([tenantId, reversalOfId, customerId])
+  @@unique([tenantId, kind, saleId])
+  @@unique([tenantId, kind, paymentId])
+  @@index([tenantId, customerId, effectiveAt])
+}
+
+model Reversal {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @db.Uuid
+  ownerUserId String           @db.Uuid
+  proposalId  String           @db.Uuid
+  saleId      String?          @db.Uuid
+  paymentId   String?          @db.Uuid
+  reason      String           @db.VarChar(500)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  owner       TenantUser       @relation(fields: [tenantId, ownerUserId], references: [tenantId, userId], onDelete: Restrict)
+  proposal    AIActionProposal @relation(fields: [tenantId, proposalId], references: [tenantId, id], onDelete: Restrict)
+  sale        Sale?            @relation(fields: [tenantId, saleId], references: [tenantId, id], onDelete: Restrict)
+  payment     Payment?         @relation(fields: [tenantId, paymentId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, proposalId])
+  @@unique([tenantId, saleId])
+  @@unique([tenantId, paymentId])
+}
+
+model DomainEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  type        String    @db.VarChar(60)
+  referenceId String    @db.Uuid
+  logicalKey  String    @unique
+  payload     Json
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  processedAt DateTime? @db.Timestamptz(3)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt])
+}
